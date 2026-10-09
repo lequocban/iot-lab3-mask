@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: iot-lab3-mask
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ORT_THREADS
+        value: "1"
+      - key: MODEL_PATH
+        value: assets/model.onnx

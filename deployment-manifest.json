@@ -1,0 +1,55 @@
+{
+  "files": [
+    {
+      "path": "app.py",
+      "bytes": 4763,
+      "sha256": "30ecbe44105b2b8a1d9719302da2fabe67f84778eac0830386c11705df36a5b9"
+    },
+    {
+      "path": "detector.py",
+      "bytes": 4870,
+      "sha256": "7d1811d381c269a7ef64b338472d12fbacea4f69494615daf8a5c19e3b7714b9"
+    },
+    {
+      "path": "requirements.txt",
+      "bytes": 106,
+      "sha256": "59466ee7f10c5912fbabd3dfd18ee9bcb3472a0f2ff48f4ed4e2529749385b95"
+    },
+    {
+      "path": "Dockerfile",
+      "bytes": 433,
+      "sha256": "c919e6f9333c76deece337b2636beb5c2db1c3ea45328c62d58fadddd0df909b"
+    },
+    {
+      "path": ".dockerignore",
+      "bytes": 75,
+      "sha256": "298e229a5522ede0f56f13c15ce415ea23752089ace6cebf82181171c1ec4175"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 182,
+      "sha256": "8c6a847e413fcb9c9713e1976326d41cad964492e0973cf0ace191ab0dbd25c3"
+    },
+    {
+      "path": "render.yaml",
+      "bytes": 226,
+      "sha256": "1af75e62599ff941c7f3643abb8c154da199da6c78eaff3154ef51ae341b21d1"
+    },
+    {
+      "path": "web/index.html",
+      "bytes": 12292,
+      "sha256": "35a99baee5d23a42db8aab9d9d668438685e2d519c775a92ecef8fc34dab6b97"
+    },
+    {
+      "path": "web/favicon.svg",
+      "bytes": 325,
+      "sha256": "82ad0c72cd8cb45d296a787f6f2b8e2be64a448add61e1e95e1ad58ddcb98e7a"
+    },
+    {
+      "path": "assets/model.onnx",
+      "bytes": 10469354,
+      "sha256": "ea0296a6907d5c260f4c64eeb33e2b4be626bb5775f69253b9228a4a8578ebb3"
+    }
+  ],
+  "note": "Local packaging only; no Cloud deployment or accuracy claim."
+}

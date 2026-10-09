@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lab 3 · Camera laptop và Cloud</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+body{font:16px system-ui;margin:24px auto;max-width:1120px;padding:0 18px;color:#172128;background:#f6f7f9}
+h1{font-size:26px}h2{font-size:19px}label{display:block;margin:10px 0}input,select,button{font:inherit;padding:8px;border:1px solid #adb6bf;border-radius:4px}input[type=url]{width:min(660px,85%)}button{cursor:pointer;margin:8px 8px 8px 0}button:disabled{cursor:default;opacity:.55}.views{display:grid;grid-template-columns:1fr 1fr;gap:18px}video,canvas{width:100%;background:#111;max-height:460px;object-fit:contain}pre{white-space:pre-wrap;background:#fff;padding:14px;border:1px solid #d5dbe0;font:14px system-ui}.note{color:#475569;font-size:14px}#status{min-height:24px}@media(max-width:760px){.views{grid-template-columns:1fr}}
+</style>
+<h1>Lab 3: nhận dạng khẩu trang qua Cloud</h1>
+<label>Địa chỉ API <input id="api" type="url" placeholder="https://ten-service.onrender.com"></label>
+<label>API key (nếu máy chủ yêu cầu) <input id="key" type="password" autocomplete="off"></label>
+<label>Camera <select id="camera"><option value="">Camera mặc định</option></select></label>
+<label>Cảnh đang kiểm tra <select id="scene">
+<option value="unlabeled">Chưa ghi nhãn thật</option><option value="with_mask">Một người: đeo đúng</option>
+<option value="without_mask">Một người: không đeo</option><option value="mask_weared_incorrect">Một người: đeo sai</option>
+<option value="mixed_three">Cảnh có đủ ba nhãn</option><option value="empty">Không có người</option>
+</select></label>
+<label>Số lượt chính thức <input id="target" type="number" value="100" min="1" max="1000"> (thêm 5 lượt làm nóng)</label>
+<p class="note" id="rate">Mục tiêu tối đa 2 ảnh suy luận/giây; tự giảm tốc độ khi API chậm. Mỗi lúc chỉ gửi một ảnh.</p>
+<button id="start">Bật camera và đo</button><button id="stop" disabled>Dừng</button>
+<button id="csv">Tải số liệu CSV</button><button id="snapshot">Lưu ảnh kết quả</button>
+<p id="status">Sẵn sàng. Mỗi lần chỉ gửi một ảnh.</p>
+<div class="views"><section><h2>Camera trực tiếp</h2><video id="video" autoplay muted playsinline></video></section>
+<section><h2>Ảnh đã suy luận</h2><canvas id="result"></canvas></section></div>
+<pre id="metrics">Chưa có số liệu.</pre><pre id="labels">Chưa có kết quả.</pre>
+<p class="note">Toàn trình bắt đầu khi ứng dụng lấy mẫu khung hình; kết thúc tại cơ hội vẽ tiếp theo của trình duyệt. Không bao gồm độ trễ cảm biến và không đo trực tiếp thời điểm màn hình vật lý phát sáng. Giữ tab ở phía trước khi đo.</p>
+<script>
+const $ = id => document.getElementById(id);
+const labels = {with_mask:'Đeo đúng',without_mask:'Không đeo',mask_weared_incorrect:'Đeo sai'};
+const colors = ['#047857','#c62828','#b45309'];
+const capture = document.createElement('canvas');
+const rows = [];
+let stream, running = false, activeLoop = false, controller, attempts = 0, successes = 0, settings;
+const MIN_PERIOD_MS = 500;
+let pipelineAverage = 0, displayTimes = [], wakeDelay;
+$('api').value = location.port === '5500' ? 'http://127.0.0.1:8000' : location.origin;
+function status(text){ $('status').textContent = text; }
+function waitBetweenSamples(ms){
+  if(!running || ms<=0)return Promise.resolve();
+  return new Promise(resolve=>{
+    const finish=()=>{clearTimeout(timer);wakeDelay=null;resolve();};
+    const timer=setTimeout(finish,ms);wakeDelay=finish;
+  });
+}
+function samplingPeriod(row, consecutiveErrors){
+  if(row.status!=='ok')return Math.max(MIN_PERIOD_MS,1000*2**(consecutiveErrors-1));
+  const pipeline=Number(row.cloud_pipeline_ms);
+  if(Number.isFinite(pipeline) && pipeline>=0){
+    pipelineAverage=pipelineAverage ? .75*pipelineAverage+.25*pipeline : pipeline;
+    // Budget roughly twice the observed server work per request for one client.
+    return Math.max(MIN_PERIOD_MS,2*pipelineAverage,2*pipeline);
+  }
+  return MIN_PERIOD_MS;
+}
+function paintOpportunity(){
+  return new Promise((resolve,reject)=>{
+    const timer = setTimeout(()=>reject(new Error('Không đo được thời điểm vẽ; giữ tab ở phía trước.')),3000);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{clearTimeout(timer);resolve(performance.now());}));
+  });
+}
+function draw(source, result){
+  const c = $('result'); c.width = source.width; c.height = source.height;
+  const ctx = c.getContext('2d');ctx.drawImage(source,0,0);
+  ctx.lineWidth = 2;ctx.font='16px system-ui';
+  for(const d of result.detections){
+    const [x1,y1,x2,y2]=d.box;ctx.strokeStyle=colors[d.class_id];ctx.fillStyle=colors[d.class_id];
+    ctx.strokeRect(x1,y1,x2-x1,y2-y1);
+    const text=`${labels[d.label] || d.label} ${(d.confidence*100).toFixed(1)}%`;
+    const y=Math.max(22,y1);ctx.fillRect(x1,y-21,ctx.measureText(text).width+10,23);
+    ctx.fillStyle='#fff';ctx.fillText(text,x1+5,y-4);
+  }
+  $('labels').textContent = result.detections.length ? result.detections.map(d=>
+    `${labels[d.label]}: ${(d.confidence*100).toFixed(1)}%`).join('\n') : 'Không có khuôn mặt vượt ngưỡng confidence 0,40.';
+}
+async function sample(){
+  if(document.hidden) throw new Error('Tab đang ẩn. Chuyển về tab camera trước khi đo.');
+  const video=$('video');
+  if(!video.videoWidth || video.readyState<2) throw new Error('Camera chưa có khung hình.');
+  const ratio=Math.min(1,640/video.videoWidth);
+  capture.width=Math.round(video.videoWidth*ratio);capture.height=Math.round(video.videoHeight*ratio);
+  const row={attempt:++attempts,phase:successes<5?'warmup':'steady',scene:$('scene').value,
+    status:'ok',error:'',jpeg_bytes:'',rtt_ms:'',e2e_ms:'',inference_ms:'',cloud_pipeline_ms:'',
+    decode_ms:'',queue_ms:'',preprocess_ms:'',postprocess_ms:'',detected_labels:'',model_sha256:'',
+    result_fps:'',sampling_period_ms:''};
+  const t0=performance.now();
+  try{
+    capture.getContext('2d').drawImage(video,0,0,capture.width,capture.height);
+    const blob=await new Promise((resolve,reject)=>capture.toBlob(b=>b?resolve(b):reject(new Error('Mã hóa JPEG thất bại.')),'image/jpeg',.8));
+    row.jpeg_bytes=blob.size;
+    const form=new FormData();form.append('file',blob,'frame.jpg');
+    controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),120000);
+    let response,body,tSend,tReceive;
+    try{
+      tSend=performance.now();
+      response=await fetch(settings.url+'/predict',{method:'POST',body:form,
+        headers:settings.key?{'X-API-Key':settings.key}:{},signal:controller.signal});
+      body=await response.text();tReceive=performance.now();
+    }finally{clearTimeout(timeout);}
+    row.rtt_ms=tReceive-tSend;
+    if(!response.ok) throw new Error(`API HTTP ${response.status}: ${body.slice(0,160)}`);
+    const data=JSON.parse(body);
+    Object.assign(row,data.timing);row.model_sha256=data.model_sha256;
+    row.detected_labels=data.detections.map(d=>d.label).join('|');
+    draw(capture,data);
+    $('metrics').textContent=`Lượt ${attempts} (${row.phase})\nSuy luận: ${row.inference_ms.toFixed(2)} ms\nGửi → nhận: ${row.rtt_ms.toFixed(2)} ms\nToàn trình: đang xác định thời điểm vẽ...`;
+    const painted=await paintOpportunity();row.e2e_ms=painted-t0;
+    displayTimes.push(painted);if(displayTimes.length>10)displayTimes.shift();
+    if(displayTimes.length>1){
+      row.result_fps=1000*(displayTimes.length-1)/(painted-displayTimes[0]);
+    }
+    // Show the final number after measuring the first display of this prediction.
+    $('metrics').textContent=`Lượt ${attempts} (${row.phase})\nFPS ảnh kết quả thực tế: ${row.result_fps===''?'đang đo':row.result_fps.toFixed(2)}\nSuy luận API: ${row.inference_ms.toFixed(2)} ms\nGửi → nhận: ${row.rtt_ms.toFixed(2)} ms\nToàn trình đến cơ hội vẽ: ${row.e2e_ms.toFixed(2)} ms\nJPEG: ${blob.size} bytes`;
+    successes++;
+  }catch(error){row.status='error';row.error=error.message;status(row.error);}
+  rows.push(row);
+  return row;
+}
+async function loop(){
+  let consecutiveErrors=0;
+  while(running && successes<settings.target+5){
+    if(document.hidden){status('Tạm dừng gửi ảnh khi tab đang ẩn.');await waitBetweenSamples(500);continue;}
+    const cycleStart=performance.now();
+    const row=await sample();consecutiveErrors=row.status==='error'?consecutiveErrors+1:0;
+    if(consecutiveErrors>=3){status('Dừng sau 3 lỗi liên tiếp. Tải CSV để xem lỗi.');break;}
+    const period=samplingPeriod(row,consecutiveErrors);
+    row.sampling_period_ms=period;
+    $('rate').textContent=`Mục tiêu tối đa 2 ảnh/giây. Khoảng lấy mẫu hiện tại: ${(period/1000).toFixed(2)} giây. Một ảnh đang xử lý mỗi lúc.`;
+    if(row.status==='ok' && running)status(`Đang đo: ${Math.max(0,successes-5)}/${settings.target} lượt chính thức; ${Math.min(successes,5)}/5 lượt làm nóng.`);
+    // Wait only for the remaining period, rather than adding a full second after inference.
+    if(running && successes<settings.target+5){
+      const elapsed=performance.now()-cycleStart;
+      const delay=row.status==='error'?period:Math.max(0,period-elapsed);
+      await waitBetweenSamples(delay);
+    }
+  }
+  if(successes>=settings.target+5)status(`Hoàn thành ${settings.target} lượt chính thức. Hãy tải CSV.`);
+  activeLoop=false;stop();
+}
+function stop(){running=false;wakeDelay?.();controller?.abort();stream?.getTracks().forEach(t=>t.stop());$('start').disabled=activeLoop;$('stop').disabled=true;}
+$('start').onclick=async()=>{
+  if(running || activeLoop)return;
+  const url=$('api').value.trim().replace(/\/$/,'');
+  const target=Number($('target').value);
+  if(!/^https?:\/\//.test(url) || !Number.isInteger(target) || target<1 || target>1000){status('Nhập URL API và số lượt 1–1000 hợp lệ.');return;}
+  $('start').disabled=true;
+  try{
+    settings={url,key:$('key').value,target};attempts=0;successes=0;
+    pipelineAverage=0;displayTimes=[];
+    $('rate').textContent='Mục tiêu tối đa 2 ảnh suy luận/giây; tự giảm tốc độ khi API chậm.';
+    const device=$('camera').value;
+    stream=await navigator.mediaDevices.getUserMedia({video:device?{deviceId:{exact:device}}:{width:{ideal:640},height:{ideal:480}},audio:false});
+    const devices=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');
+    const selected=stream.getVideoTracks()[0].getSettings().deviceId;
+    $('camera').replaceChildren(...devices.map((d,i)=>new Option(d.label||`Camera ${i+1}`,d.deviceId)));
+    $('camera').value=selected;
+    $('video').srcObject=stream;await $('video').play();
+    if($('video').readyState<2)await new Promise(resolve=>$('video').addEventListener('loadeddata',resolve,{once:true}));
+    running=true;activeLoop=true;$('stop').disabled=false;status('Đang đo. 5 lượt thành công đầu dùng để làm nóng.');
+    await loop();
+  }catch(error){status(`Không thể chạy: ${error.name}: ${error.message}`);activeLoop=false;stop();}
+};
+$('stop').onclick=()=>{stop();status('Đã dừng. Có thể tải CSV và lưu ảnh kết quả.');};
+function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+$('csv').onclick=()=>{
+  if(!rows.length){status('Chưa có số liệu.');return;}
+  const columns=Object.keys(rows[0]);const escape=v=>'"'+String(v??'').replaceAll('"','""')+'"';
+  const csv=[columns.join(','),...rows.map(r=>columns.map(k=>escape(r[k])).join(','))].join('\r\n');
+  download(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),`latency-${Date.now()}.csv`);
+};
+$('snapshot').onclick=()=>{
+  if(!$('result').width || !successes){status('Chưa có ảnh kết quả.');return;}
+  $('result').toBlob(blob=>download(blob,`mask-result-${Date.now()}.png`),'image/png');
+};
+window.addEventListener('beforeunload',stop);
+</script>
+</html>

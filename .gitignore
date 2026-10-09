@@ -1,0 +1,14 @@
+.venv/
+.test-deps/
+.verify-deps/
+__pycache__/
+.pytest_cache/
+tests/.tmp-*/
+tests/browser-script.js
+data/
+runs/
+evidence/*.csv
+evidence/*.json
+!evidence/dataset-audit.json
+*.zip
+.env
