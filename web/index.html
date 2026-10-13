@@ -19,6 +19,7 @@
 @media(max-width:560px){.shell{padding:22px 14px}.topbar-inner{padding:14px 16px}.brand-mark{width:35px;height:35px;border-radius:10px}.brand-name{font-size:18px}.brand-subtitle{font-size:9px}.lab-tag{display:none}.top-meta .badge{font-size:10px;padding:5px 8px}h1{font-size:25px}.subtitle{font-size:12px;max-width:300px}.workspace{gap:18px}.controls{padding:18px;gap:0 13px}.controls .field:first-of-type{grid-column:1/-1}.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.metric-card{padding:14px 16px}.metric-value{font-size:28px}.views{grid-template-columns:1fr;gap:15px}.viewport{aspect-ratio:4/3}.feed-header{padding:15px 17px}.feed-title{font-size:13px}.feed-footer{padding:12px 17px}.session-count{display:none}.results-header{padding:16px}.legend{padding:12px 16px;gap:12px}.label-list{padding:15px 16px}.export-bar{align-items:flex-start;flex-direction:column}.export-actions{width:100%}.export-actions .button{flex:1;font-size:11px}.footer{font-size:9px}.footer span:last-child{display:none}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 @media(max-width:560px){.controls>.field{grid-column:1/-1}}
+.alert-toggle{grid-column:1/-1;display:flex;align-items:flex-start;gap:9px;border-top:1px solid var(--line);padding-top:14px;margin-top:15px;cursor:pointer;font-size:12px;font-weight:650}.alert-toggle input{width:16px;height:16px;flex:none;margin:3px 0 0;accent-color:var(--teal)}.alert-toggle small{display:block;color:var(--muted);font-size:10px;font-weight:400;margin-top:4px}.alerts-panel{margin-top:18px}.alerts-body{padding:16px 20px}.alerts-policy{font-size:11px;color:var(--muted);margin-bottom:12px}.alert-list{list-style:none;margin:0;padding:0}.alert-item{padding:11px 0;border-top:1px solid var(--line);font-size:12px}.alert-item strong{display:block;font-size:12px}.alert-item p{color:var(--muted);font-size:11px;margin-top:4px;overflow-wrap:anywhere}.alert-message{font-size:12px;color:var(--muted);margin-bottom:10px}.alert-message[data-state=error]{color:var(--red)}.alerts-header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.alerts-header-actions .button{min-height:32px;padding:6px 9px;font-size:10px}.alerts-header-actions .badge{font-size:10px}
 </style>
 </head>
 <body>
@@ -54,6 +55,7 @@
       <details class="connection"><summary>Kết nối API</summary><label class="field" for="api"><span class="field-name">Địa chỉ API</span><input id="api" type="url" placeholder="https://ten-service.onrender.com" spellcheck="false" autocomplete="url"></label><label class="field" for="key"><span class="field-name">API key <span style="font-weight:400;color:var(--muted)">(nếu có)</span></span><input id="key" type="password" autocomplete="off" placeholder="Không bắt buộc"></label></details>
       <div class="control-actions"><button class="button primary" id="start"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>Bật camera và đo</button><button class="button stop-button" id="stop" disabled><svg class="icon" aria-hidden="true"><use href="#i-stop"/></svg>Dừng phiên</button></div>
       <div class="rate-note"><svg class="icon" aria-hidden="true"><use href="#i-bolt"/></svg><p id="rate">Tối đa 2 ảnh kết quả/giây. Tự giảm tốc độ khi API chậm; mỗi lúc chỉ gửi một ảnh.</p></div>
+      <label class="alert-toggle" for="notify"><input type="checkbox" id="notify"><span>Bật lưu và gửi cảnh báo<small>Gửi ảnh vi phạm tới Supabase và Telegram đã cấu hình trên máy chủ.</small></span></label>
       <p class="control-footer">Giữ tab ở phía trước khi chạy demo.</p>
     </aside>
     <section class="main-content" aria-label="Camera và kết quả nhận dạng">
@@ -75,6 +77,7 @@
         </section>
       </div>
       <section class="panel results-panel"><div class="results-header"><div><h2>Kết quả nhận dạng</h2><p class="results-caption">Trạng thái khẩu trang của từng khuôn mặt trong ảnh gần nhất.</p></div><span class="result-count" id="face-count">Chưa có kết quả</span></div><div class="legend" aria-label="Màu của ba nhãn"><span><i style="background:#047857"></i>Đeo đúng</span><span><i style="background:#c62828"></i>Không đeo</span><span><i style="background:#b45309"></i>Đeo sai</span></div><div class="label-list" id="labels"><p class="empty-labels">Chưa có ảnh được phân tích.</p></div></section>
+      <section class="panel alerts-panel" aria-label="Nhật ký cảnh báo"><div class="results-header"><div><h2>Cảnh báo &amp; thông báo</h2><p class="results-caption">Lưu sự kiện vào Supabase, gửi ảnh qua Telegram.</p></div><div class="alerts-header-actions"><span class="badge" id="alerts-badge" data-state="idle">Chưa kiểm tra</span><button class="button" id="alerts-refresh" type="button">Cập nhật</button></div></div><div class="alerts-body"><p class="alerts-policy" id="alerts-policy">Xác nhận cùng loại vi phạm ở 2/3 ảnh gần nhất; nghỉ ít nhất 30 giây giữa các cảnh báo.</p><p class="alert-message" id="alerts-message" role="status" aria-live="polite">Chưa bật lưu và gửi cảnh báo. Khóa dịch vụ được đặt ở máy chủ.</p><ul class="alert-list" id="alert-list"></ul></div></section>
       <div class="export-bar"><p class="export-note"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Lưu ảnh và số liệu đã thu trong trang.</p><div class="export-actions"><button class="button" id="snapshot" disabled><svg class="icon" aria-hidden="true"><use href="#i-image"/></svg>Lưu ảnh kết quả</button><button class="button" id="csv" disabled><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Tải số liệu CSV</button></div></div>
       <details class="measurement-note"><summary>Cách hiểu số đo độ trễ</summary><p>Suy luận API chỉ tính thời gian chạy mô hình. Gửi → nhận tính từ lúc gửi ảnh đến khi đọc xong phản hồi. Toàn trình bắt đầu lúc lấy mẫu khung hình và kết thúc tại cơ hội vẽ tiếp theo của trình duyệt; không bao gồm độ trễ cảm biến hoặc xác nhận thời điểm màn hình vật lý phát sáng. Giữ tab ở phía trước khi đo.</p></details>
       <pre class="sr-only" id="metrics">Chưa có số liệu.</pre>
@@ -88,7 +91,7 @@ const labels = {with_mask:'Đeo đúng',without_mask:'Không đeo',mask_weared_i
 const colors = ['#047857','#c62828','#b45309'];
 const capture = document.createElement('canvas');
 const rows = [];
-let stream, running = false, activeLoop = false, controller, attempts = 0, successes = 0, settings;
+let stream, running = false, activeLoop = false, controller, attempts = 0, successes = 0, settings, sessionId;
 const MIN_PERIOD_MS = 500;
 let pipelineAverage = 0, displayTimes = [], wakeDelay;
 $('api').value = location.port === '5500' ? 'http://127.0.0.1:8000' : location.origin;
@@ -108,6 +111,47 @@ function showProgress(){
   $('session-count').textContent=`${count} / ${settings.target} lượt`;
   $('progress-fill').style.width=`${Math.min(100,100*count/settings.target)}%`;
 }
+function showAlerts(info, decision){
+  if(!info)return;
+  const badge=$('alerts-badge'),message=$('alerts-message');
+  badge.dataset.state=info.enabled?'active':info.configuration_error?'error':'idle';
+  badge.textContent=info.enabled?'Đã cấu hình':info.configuration_error?'Thiếu cấu hình':'Máy chủ chưa bật';
+  $('alerts-policy').textContent=`Xác nhận cùng loại vi phạm ở 2/3 ảnh gần nhất trong 8 giây; nghỉ ${info.cooldown_seconds || 30} giây giữa các cảnh báo.`;
+  const states={disabled:'Máy chủ chưa bật tích hợp cảnh báo.',not_configured:'Cấu hình tích hợp chưa hoàn tất.',
+    paused:'Đang tắt lưu và gửi ảnh mới. Tác vụ đã xếp hàng vẫn tiếp tục.',missing_session:'Thiếu mã phiên. Hãy bật lại camera.',
+    observing:'Đang quan sát thêm để xác nhận vi phạm.',no_violation:'Ảnh hiện tại chưa có vi phạm đủ ngưỡng nhận dạng.',
+    cooldown:`Đang nghỉ giữa các cảnh báo: còn ${decision?.remaining_seconds ?? info.cooldown_remaining_seconds} giây.`,
+    queue_full:'Hàng đợi đang đầy; ảnh này chưa được lưu hoặc gửi.',queued:'Đã xếp hàng cảnh báo. Đang lưu ảnh và gửi Telegram.'};
+  message.dataset.state=info.configuration_error?'error':'idle';
+  message.textContent=info.configuration_error || states[decision?.state] || (info.enabled?'Tích hợp đã sẵn sàng. Bật lưu và gửi cảnh báo để sử dụng.':'Máy chủ chưa bật tích hợp cảnh báo.');
+  const items=document.createDocumentFragment();
+  const statusNames={pending:'Đang chờ',saved:'Đã lưu',sent:'Đã gửi',failed:'Lỗi',unknown:'Chưa xác nhận'};
+  for(const event of (info.recent || []).slice(0,5)){
+    const item=document.createElement('li');item.className='alert-item';
+    const title=document.createElement('strong');
+    title.textContent=`${new Date(event.occurred_at).toLocaleTimeString('vi-VN')} · ${event.violation_labels.map(name=>labels[name] || name).join(', ')}`;
+    const delivery=document.createElement('p');
+    delivery.textContent=`Log: ${statusNames[event.log_status] || event.log_status} · Ảnh: ${statusNames[event.storage_status] || event.storage_status} · Telegram: ${statusNames[event.telegram_status] || event.telegram_status}`;
+    const id=document.createElement('p');id.textContent=`Mã: ${event.id}`;
+    item.append(title,delivery,id);
+    if(event.errors?.length){const error=document.createElement('p');error.textContent=`Chi tiết: ${event.errors.join(', ')}`;item.append(error);}
+    items.append(item);
+  }
+  $('alert-list').replaceChildren(items);
+}
+$('alerts-refresh').onclick=async()=>{
+  const button=$('alerts-refresh');button.disabled=true;
+  const abort=new AbortController(),timeout=setTimeout(()=>abort.abort(),15000);
+  try{
+    const url=$('api').value.trim().replace(/\/$/,'');
+    if(!/^https?:\/\//.test(url))throw new Error('Địa chỉ API chưa hợp lệ.');
+    const response=await fetch(url+'/alerts/status'+(sessionId?'?session_id='+encodeURIComponent(sessionId):''),{
+      headers:$('key').value?{'X-API-Key':$('key').value}:{},signal:abort.signal});
+    if(!response.ok)throw new Error(`API HTTP ${response.status}. Kiểm tra API key hoặc phiên bản triển khai.`);
+    showAlerts(await response.json());
+  }catch(error){$('alerts-message').dataset.state='error';$('alerts-message').textContent=`Chưa lấy được trạng thái: ${error.message}`;}
+  finally{clearTimeout(timeout);button.disabled=false;}
+};
 function waitBetweenSamples(ms){
   if(!running || ms<=0)return Promise.resolve();
   return new Promise(resolve=>{
@@ -174,13 +218,14 @@ async function sample(){
     const blob=await new Promise((resolve,reject)=>capture.toBlob(b=>b?resolve(b):reject(new Error('Mã hóa JPEG thất bại.')),'image/jpeg',.8));
     row.jpeg_bytes=blob.size;
     const form=new FormData();form.append('file',blob,'frame.jpg');
+    form.append('notify',$('notify').checked?'true':'false');
     controller=new AbortController();
     const timeout=setTimeout(()=>controller.abort(),120000);
     let response,body,tSend,tReceive;
     try{
       tSend=performance.now();
       response=await fetch(settings.url+'/predict',{method:'POST',body:form,
-        headers:settings.key?{'X-API-Key':settings.key}:{},signal:controller.signal});
+        headers:{'X-Session-ID':sessionId,...(settings.key?{'X-API-Key':settings.key}:{})},signal:controller.signal});
       body=await response.text();tReceive=performance.now();
     }finally{clearTimeout(timeout);}
     row.rtt_ms=tReceive-tSend;
@@ -201,6 +246,8 @@ async function sample(){
     }
     // Show the final number after measuring the first display of this prediction.
     showMetrics(row);
+    // Update delivery status after measuring this prediction's display opportunity.
+    showAlerts(data.alert_status,data.alert);
     $('metrics').textContent=`Lượt ${attempts} (${row.phase})\nFPS ảnh kết quả thực tế: ${row.result_fps===''?'đang đo':row.result_fps.toFixed(2)}\nSuy luận API: ${row.inference_ms.toFixed(2)} ms\nGửi → nhận: ${row.rtt_ms.toFixed(2)} ms\nToàn trình đến cơ hội vẽ: ${row.e2e_ms.toFixed(2)} ms\nJPEG: ${blob.size} bytes`;
     successes++;
     showProgress();$('snapshot').disabled=false;
@@ -244,6 +291,7 @@ $('start').onclick=async()=>{
   $('start').disabled=true;
   try{
     settings={url,key:$('key').value,target};attempts=0;successes=0;
+    sessionId=crypto.randomUUID();
     pipelineAverage=0;displayTimes=[];
     showMetrics({});showProgress();
     badge('connection-status','connection-text','idle','Chờ phản hồi');

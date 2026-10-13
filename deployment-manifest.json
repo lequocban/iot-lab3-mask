@@ -2,13 +2,18 @@
   "files": [
     {
       "path": "app.py",
-      "bytes": 4763,
-      "sha256": "30ecbe44105b2b8a1d9719302da2fabe67f84778eac0830386c11705df36a5b9"
+      "bytes": 5820,
+      "sha256": "dcb9080da3d932ee20f255310c53d2b64a8b99d2c84a37cd4b85c0814943a64b"
     },
     {
       "path": "detector.py",
       "bytes": 4870,
       "sha256": "7d1811d381c269a7ef64b338472d12fbacea4f69494615daf8a5c19e3b7714b9"
+    },
+    {
+      "path": "alerts.py",
+      "bytes": 16248,
+      "sha256": "fb18c34d6bb65495c193d809e2e8858538b03b7b2ae1a78e8461568c52d14cb3"
     },
     {
       "path": "requirements.txt",
@@ -17,33 +22,53 @@
     },
     {
       "path": "Dockerfile",
-      "bytes": 433,
-      "sha256": "c919e6f9333c76deece337b2636beb5c2db1c3ea45328c62d58fadddd0df909b"
+      "bytes": 443,
+      "sha256": "ac3ec511681d30c73e8ff3c0e33f48a029172bce5601aaa57ddb5758af43091f"
     },
     {
       "path": ".dockerignore",
-      "bytes": 75,
-      "sha256": "298e229a5522ede0f56f13c15ce415ea23752089ace6cebf82181171c1ec4175"
+      "bytes": 86,
+      "sha256": "31fb80ce5609adedae34366b2113ac2a1423ead1b695efb9b17dd83518c8a22c"
     },
     {
       "path": ".gitignore",
-      "bytes": 182,
-      "sha256": "8c6a847e413fcb9c9713e1976326d41cad964492e0973cf0ace191ab0dbd25c3"
+      "bytes": 203,
+      "sha256": "8ff0ec3c268f054241a102b336cf9e195cfaf0c97fe4c6cc21a755cbc61615e4"
     },
     {
       "path": "render.yaml",
-      "bytes": 226,
-      "sha256": "1af75e62599ff941c7f3643abb8c154da199da6c78eaff3154ef51ae341b21d1"
+      "bytes": 329,
+      "sha256": "c686c150cf4e8122db1e8d7e146a222e1a70f592be7a77d72982dde3149cec49"
     },
     {
       "path": "web/index.html",
-      "bytes": 36310,
-      "sha256": "713ecd3d292fc7157d28d23679730360f196d7b7bfe133cbc876dee844d36243"
+      "bytes": 42356,
+      "sha256": "0c2e7960372cf8e108dab3667ddc1a2c075d379f22efa27645162b0373be0ac3"
     },
     {
       "path": "web/favicon.svg",
       "bytes": 325,
       "sha256": "82ad0c72cd8cb45d296a787f6f2b8e2be64a448add61e1e95e1ad58ddcb98e7a"
+    },
+    {
+      "path": "supabase/alerts.sql",
+      "bytes": 1549,
+      "sha256": "c9e5c8092c301a0381da338b216423df44d93d77a2590fc33d3f27669739821a"
+    },
+    {
+      "path": ".env.example",
+      "bytes": 294,
+      "sha256": "cd96c2dce33b0bcf06ade7391a39a72810239c5b3209595ff39369ce52ce4a02"
+    },
+    {
+      "path": "HUONG_DAN_CANH_BAO.md",
+      "bytes": 17057,
+      "sha256": "317d77aff933289e4c6d64cc91251bbfcddea8eed91fa21a082e9e0084869fbc"
+    },
+    {
+      "path": "telegram_setup.py",
+      "bytes": 2309,
+      "sha256": "a40399d172b79b5e87980c30d7dd44515ee6a89a596201cc34a350e9983f67b0"
     },
     {
       "path": "assets/model.onnx",

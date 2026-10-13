@@ -12,3 +12,5 @@ evidence/*.json
 !evidence/dataset-audit.json
 *.zip
 .env
+.env.*
+!.env.example

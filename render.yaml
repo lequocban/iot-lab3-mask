@@ -9,3 +9,7 @@ services:
         value: "1"
       - key: MODEL_PATH
         value: assets/model.onnx
+      - key: ALERTS_ENABLED
+        value: "0"
+      - key: ALERT_COOLDOWN_SECONDS
+        value: "30"

@@ -5,16 +5,18 @@ import os
 import threading
 import time
 import urllib.request
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from PIL import Image, ImageOps, UnidentifiedImageError
 from starlette.concurrency import run_in_threadpool
 
 from detector import Detector, NAMES
+from alerts import AlertConfig, AlertService
 
 BASE = Path(__file__).resolve().parent
 Image.MAX_IMAGE_PIXELS = 12_000_000
@@ -58,14 +60,19 @@ async def lifespan(app):
     path, checksum = load_model_file()
     app.state.detector = Detector(path)
     app.state.checksum = checksum
-    yield
+    app.state.alerts = AlertService(AlertConfig.from_env())
+    app.state.alerts.start()
+    try:
+        yield
+    finally:
+        await run_in_threadpool(app.state.alerts.close)
 
 
 app = FastAPI(title="IoT Lab 3 - three mask labels", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:5500,http://127.0.0.1:5500").split(","),
-    allow_methods=["GET", "POST"], allow_headers=["Content-Type", "X-API-Key"],
+    allow_methods=["GET", "POST"], allow_headers=["Content-Type", "X-API-Key", "X-Session-ID"],
 )
 
 
@@ -78,6 +85,27 @@ def index():
 def health():
     return {"status": "ok", "classes": NAMES, "model_sha256": app.state.checksum,
             "input_size": app.state.detector.size, "provider": "CPUExecutionProvider"}
+
+
+def authorize(key):
+    expected = os.getenv("API_KEY", "")
+    if expected and not hmac.compare_digest(expected, key or ""):
+        raise HTTPException(401, "Invalid API key")
+
+
+def validate_session(value):
+    if value is None:
+        return None
+    try:
+        return str(uuid.UUID(value))
+    except ValueError:
+        raise HTTPException(400, "X-Session-ID must be a UUID") from None
+
+
+@app.get("/alerts/status")
+def alert_status(session_id: str | None = None, x_api_key: str | None = Header(default=None)):
+    authorize(x_api_key)
+    return app.state.alerts.snapshot(validate_session(session_id))
 
 
 @app.get("/favicon.svg", include_in_schema=False)
@@ -113,14 +141,17 @@ def infer(data):
 
 
 @app.post("/predict")
-async def predict(file: UploadFile = File(...), x_api_key: str | None = Header(default=None)):
-    key = os.getenv("API_KEY", "")
-    if key and not hmac.compare_digest(key, x_api_key or ""):
-        raise HTTPException(401, "Invalid API key")
+async def predict(file: UploadFile = File(...), notify: bool = Form(default=False),
+                  x_api_key: str | None = Header(default=None), x_session_id: str | None = Header(default=None)):
+    authorize(x_api_key)
+    session_id = validate_session(x_session_id)
     if file.content_type not in ("image/jpeg", "image/png", "image/webp"):
         raise HTTPException(415, "Send JPEG, PNG or WebP in multipart field 'file'")
     data = await file.read(MAX_UPLOAD + 1)
     await file.close()
     if len(data) > MAX_UPLOAD:
         raise HTTPException(413, "Upload exceeds 2 MiB")
-    return await run_in_threadpool(infer, data)
+    result = await run_in_threadpool(infer, data)
+    result["alert"] = app.state.alerts.observe(session_id, result, data, notify)
+    result["alert_status"] = app.state.alerts.snapshot(session_id)
+    return result
