@@ -2,8 +2,8 @@
   "files": [
     {
       "path": "app.py",
-      "bytes": 5820,
-      "sha256": "dcb9080da3d932ee20f255310c53d2b64a8b99d2c84a37cd4b85c0814943a64b"
+      "bytes": 7279,
+      "sha256": "a804e9daa52b220f157f5511e207a5d49f25a160cc2a40bdee3c1af407c24c0c"
     },
     {
       "path": "detector.py",
@@ -12,8 +12,8 @@
     },
     {
       "path": "alerts.py",
-      "bytes": 16248,
-      "sha256": "fb18c34d6bb65495c193d809e2e8858538b03b7b2ae1a78e8461568c52d14cb3"
+      "bytes": 20917,
+      "sha256": "f889fe4f61bf36f9404b6c768b474b9972569bbbfb749292ca8a94da82e4e85d"
     },
     {
       "path": "requirements.txt",
@@ -42,8 +42,8 @@
     },
     {
       "path": "web/index.html",
-      "bytes": 48984,
-      "sha256": "af0b60d97d7ed1fefbcd03b49dcdbe43a3c836f29487c631bf44b1a4d80fab45"
+      "bytes": 59402,
+      "sha256": "d111a8b01a3c3ddb8cd6c2d41df6d251e1f719807c1ef7a309fc28bc89ec3b92"
     },
     {
       "path": "web/favicon.svg",
@@ -62,8 +62,8 @@
     },
     {
       "path": "HUONG_DAN_CANH_BAO.md",
-      "bytes": 17057,
-      "sha256": "317d77aff933289e4c6d64cc91251bbfcddea8eed91fa21a082e9e0084869fbc"
+      "bytes": 18838,
+      "sha256": "4082c9af5e198b87a56d0c7be687dbf782e78ef7f3ad2942ff6fc72151164df1"
     },
     {
       "path": "telegram_setup.py",

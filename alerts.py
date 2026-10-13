@@ -1,5 +1,6 @@
 """Bounded background alert delivery. No external calls on the inference path."""
 import copy
+import base64
 import io
 import json
 import math
@@ -43,7 +44,10 @@ class AlertConfig:
 
     @classmethod
     def from_env(cls):
-        config = cls()
+        # Retain read credentials even when outgoing alerts are switched off.
+        config = cls(supabase_url=os.getenv("SUPABASE_URL", "").strip().rstrip("/"),
+                     supabase_key=os.getenv("SUPABASE_SECRET_KEY", "").strip(),
+                     bucket=os.getenv("SUPABASE_ALERT_BUCKET", "mask-alerts"))
         if os.getenv("ALERTS_ENABLED", "0").lower() not in {"1", "true", "yes"}:
             return config
         required = ["SUPABASE_URL", "SUPABASE_SECRET_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "API_KEY"]
@@ -230,7 +234,7 @@ class AlertService:
             self.last_accepted = now
             return {"state": "queued", "event_id": event_id}
 
-    def _supabase(self, endpoint, data, content_type="application/json", extra=None):
+    def _supabase(self, endpoint, data=None, content_type="application/json", extra=None, method="POST"):
         headers = {"apikey": self.config.supabase_key, "Content-Type": content_type}
         if self.config.supabase_key.startswith("eyJ"):
             headers["Authorization"] = "Bearer " + self.config.supabase_key
@@ -238,12 +242,94 @@ class AlertService:
         # DB UUID and object path are fixed, making retries idempotent.
         for attempt in range(2):
             try:
-                return self.transport("POST", self.config.supabase_url + endpoint, headers,
+                return self.transport(method, self.config.supabase_url + endpoint, headers,
                                       data, self.config.timeout, "supabase")
             except DeliveryError as exc:
                 if attempt or not (exc.ambiguous or exc.code == "supabase_http_429"):
                     raise
                 time.sleep(.2)
+
+    def _check_history_config(self):
+        try:
+            parsed = urllib.parse.urlsplit(self.config.supabase_url)
+            valid = (parsed.scheme == "https" and parsed.hostname and not parsed.username
+                     and not parsed.password and not parsed.path and not parsed.query
+                     and not parsed.fragment and parsed.port in (None, 443)
+                     and self.config.supabase_key.startswith(("sb_secret_", "eyJ"))
+                     and re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,62}", self.config.bucket))
+        except ValueError:
+            valid = False
+        if not valid:
+            raise DeliveryError("history_not_configured")
+
+    def _read_rows(self, params):
+        self._check_history_config()
+        endpoint = "/rest/v1/mask_alerts?" + urllib.parse.urlencode(params)
+        try:
+            rows = json.loads(self._supabase(endpoint, method="GET"))
+            if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+                raise ValueError()
+            return rows
+        except (ValueError, TypeError):
+            raise DeliveryError("supabase_invalid_response") from None
+
+    @staticmethod
+    def _decode_cursor(cursor):
+        try:
+            if len(cursor) > 512:
+                raise ValueError()
+            value = json.loads(base64.b64decode(cursor + "="*((-len(cursor)) % 4), altchars=b"-_", validate=True))
+            moment = datetime.fromisoformat(value["time"])
+            if moment.tzinfo is None:
+                raise ValueError()
+            return moment.astimezone(timezone.utc).isoformat(), str(uuid.UUID(value["id"]))
+        except (ValueError, KeyError, TypeError, AttributeError):
+            raise ValueError("Invalid history cursor") from None
+
+    def read_history(self, limit=10, cursor=None):
+        if not 1 <= limit <= 50:
+            raise ValueError("History page size must be between 1 and 50")
+        columns = ("id,occurred_at,session_id,violation_labels,counts,model_sha256,inference_ms,"
+                   "cloud_pipeline_ms,image_path,storage_status,telegram_status,telegram_message_id,"
+                   "telegram_ack_ms,errors,completed_at")
+        params = {"select": columns, "order": "occurred_at.desc,id.desc", "limit": limit+1}
+        if cursor:
+            moment, identifier = self._decode_cursor(cursor)
+            params["or"] = f"(occurred_at.lt.{moment},and(occurred_at.eq.{moment},id.lt.{identifier}))"
+        rows = self._read_rows(params)
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        next_cursor = None
+        if rows and has_more:
+            try:
+                last = rows[-1]
+                # Validate values from the database before incorporating them into a cursor.
+                moment = datetime.fromisoformat(last["occurred_at"])
+                if moment.tzinfo is None:
+                    raise ValueError()
+                identifier = str(uuid.UUID(last["id"]))
+                next_cursor = base64.urlsafe_b64encode(json.dumps({
+                    "time": moment.isoformat(), "id": identifier}).encode()).decode().rstrip("=")
+            except (ValueError, TypeError, KeyError):
+                raise DeliveryError("supabase_invalid_response") from None
+        for row in rows:
+            # A row read from Postgres is persisted, independently of runtime memory.
+            row["log_status"] = "saved"
+        return {"items": rows, "has_more": has_more, "next_cursor": next_cursor, "source": "supabase"}
+
+    def read_image(self, event_id):
+        identifier = str(uuid.UUID(event_id))
+        rows = self._read_rows({"select": "id,image_path,storage_status", "id": "eq."+identifier, "limit": 1})
+        if not rows or not rows[0].get("image_path"):
+            raise DeliveryError("alert_image_not_found")
+        path = rows[0]["image_path"]
+        if not isinstance(path, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}/"+re.escape(identifier)+r"\.jpg", path):
+            raise DeliveryError("alert_image_path_invalid")
+        endpoint = "/storage/v1/object/authenticated/"+self.config.bucket+"/"+urllib.parse.quote(path, safe="/")
+        photo = self._supabase(endpoint, method="GET")
+        if not photo.startswith(b"\xff\xd8"):
+            raise DeliveryError("alert_image_invalid")
+        return photo
 
     def _save_row(self, row):
         payload = {k: v for k, v in row.items() if k != "log_status"}

@@ -169,13 +169,15 @@ Mục tiêu: xác nhận toàn bộ luồng thật sau khi đã cấu hình dị
 2. Mở mục Kết nối API, nhập **API_KEY bạn tự đặt ở Render**. Không nhập key
    Supabase hoặc bot token vào trình duyệt. API_KEY này bảo vệ cả predict và
    endpoint xem trạng thái cảnh báo.
-3. Nhấn Cập nhật trong khung Cảnh báo & thông báo. Phải thấy “Đã cấu hình”.
-   Điều này chỉ xác nhận cấu hình có đủ/đúng định dạng; chưa chứng minh các
-   credential được nhà cung cấp chấp nhận.
+3. Nhấn Cập nhật trong khung Lịch sử cảnh báo. API đọc trực tiếp bảng Supabase,
+   hiển thị các phiên trước, mỗi trang 10 bản ghi; dùng Trước/Sau để xem tiếp.
+   Badge “Đã cấu hình” chỉ xác nhận tích hợp gửi có đủ/đúng định dạng; kết quả
+   tải bảng thành công mới xác nhận quyền đọc database.
 4. Tick “Bật lưu và gửi cảnh báo”, chọn số lượt phù hợp và bật camera.
 5. Thử không đeo hoặc kéo khẩu trang xuống mũi đủ lâu để có ba quan sát.
-6. Khi đủ quy tắc, giao diện hiện Đã xếp hàng. Các ảnh sau hoặc nút Cập nhật
-   sẽ cho biết kết quả lưu log, lưu ảnh và gửi Telegram riêng biệt.
+6. Khi đủ quy tắc, giao diện hiện Đã xếp hàng. Nhấn Cập nhật sau khi worker xử
+   lý để đọc kết quả đã lưu. Khi đã tải lịch sử Supabase, dữ liệu phiên camera
+   không ghi đè trang đang xem. Nhấn “Xem ảnh & chi tiết” để mở ảnh trực tiếp.
 7. Mở Telegram trên điện thoại: có ảnh cảnh báo và caption tiếng Việt.
 8. Mở Supabase Table Editor: có một row với cùng mã sự kiện. Mở Storage,
    đường dẫn ngày/UUID.jpg phải có ảnh tương ứng, có khung và nhãn.
@@ -222,9 +224,26 @@ các bước Supabase trước đó và request Telegram. Không gồm thời gi
 ba ảnh và không đo lúc điện thoại phát thông báo. Không lấy timestamp laptop
 trừ timestamp Cloud để tính độ trễ.
 
-Nút Cập nhật đọc trạng thái bộ nhớ của tiến trình, không phải toàn bộ lịch sử
-Supabase. Sau restart, danh sách runtime có thể trống; log đã ghi ở Supabase
-vẫn còn. File SQL cung cấp bảng để xem lịch sử bằng dashboard.
+Nút Cập nhật đọc `/alerts/history` từ Supabase, không lọc theo phiên camera và
+không bị giới hạn bởi danh sách bộ nhớ runtime. Mỗi trang 10 bản ghi, sắp xếp
+theo thời gian rồi ID giảm dần; cursor cho phép đi qua toàn bộ dữ liệu đã lưu
+mà các bản ghi mới không làm lệch vị trí trang sau. Nhấn Cập nhật để trở về
+trang đầu và đọc các sự kiện mới nhất. `/alerts/status` vẫn là trạng thái
+runtime nhẹ, không phải nguồn lịch sử lâu dài.
+
+`GET /alerts/{id}/image` tra đường dẫn theo ID trong database rồi tải file
+private từ Supabase Storage. Cả lịch sử và ảnh đều yêu cầu API_KEY; frontend
+gửi key bằng header và hiển thị ảnh bằng Blob URL, không gắn key vào link ảnh.
+Đóng cửa sổ chi tiết sẽ giải phóng ảnh. Ảnh thiếu hoặc lỗi được thông báo riêng,
+không coi là ảnh đã tải thành công. Không cần đổi bucket thành public.
+
+Có thể đọc lịch sử khi `ALERTS_ENABLED=0` nếu API_KEY và cấu hình Supabase
+vẫn còn. Không cần bật Telegram để xem các bản ghi cũ. Nếu backend trả lỗi,
+giao diện giữ trang đã tải trước đó và hiển thị nguyên nhân; không thay lỗi
+bằng bảng trống. Không thể khôi phục sự kiện chưa từng ghi thành công vào DB.
+
+Tham khảo [phân trang Supabase](https://supabase.com/docs/reference/python/range),
+[tải file private](https://supabase.com/docs/reference/python/storage-from-download).
 
 ## 8. Xử lý lỗi và giới hạn của bản demo
 
@@ -269,11 +288,13 @@ bằng Supabase dashboard; bản này chưa tự đặt lịch xóa ảnh/log. K
 - `.env.example`: danh sách biến môi trường rỗng, không tự động nạp.
 - Dockerfile, dockerignore, prepare_render.py: đưa module mới vào gói triển khai.
 - `tests/test_alerts.py`: kiểm thử dịch vụ giả lập, không gửi dữ liệu thật.
+- `tests/test_alert_history.py`: kiểm tra lịch sử qua nhiều trang, sau restart,
+  giữa các phiên, quyền xem ảnh và chống truy cập đường dẫn ngoài bucket.
 
 Chạy kiểm thử với môi trường đã cài requirements-test.txt:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests/test_alerts.py tests/test_contract.py -q
+.\.venv\Scripts\python.exe -m pytest tests/test_alert_history.py tests/test_alerts.py tests/test_contract.py -q
 ```
 
 Các test kiểm tra quyền/opt-in, cùng loại vi phạm qua nhiều ảnh, tách phiên,

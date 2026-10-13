@@ -9,14 +9,14 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from PIL import Image, ImageOps, UnidentifiedImageError
 from starlette.concurrency import run_in_threadpool
 
 from detector import Detector, NAMES
-from alerts import AlertConfig, AlertService
+from alerts import AlertConfig, AlertService, DeliveryError
 
 BASE = Path(__file__).resolve().parent
 Image.MAX_IMAGE_PIXELS = 12_000_000
@@ -106,6 +106,41 @@ def validate_session(value):
 def alert_status(session_id: str | None = None, x_api_key: str | None = Header(default=None)):
     authorize(x_api_key)
     return app.state.alerts.snapshot(validate_session(session_id))
+
+
+def authorize_history(key):
+    # History/photos remain private even if outgoing alerts are disabled.
+    if not os.getenv("API_KEY", ""):
+        raise HTTPException(503, "Set API_KEY on the server before reading alert history")
+    authorize(key)
+
+
+def history_error(exc):
+    status_code = 503 if exc.code == "history_not_configured" else 404 if exc.code == "alert_image_not_found" else 502
+    return HTTPException(status_code, exc.code)
+
+
+@app.get("/alerts/history")
+def alert_history(limit: int = Query(default=10, ge=1, le=50), cursor: str | None = Query(default=None, max_length=512),
+                  x_api_key: str | None = Header(default=None)):
+    authorize_history(x_api_key)
+    try:
+        return app.state.alerts.read_history(limit, cursor)
+    except ValueError:
+        raise HTTPException(400, "Invalid history cursor") from None
+    except DeliveryError as exc:
+        raise history_error(exc) from None
+
+
+@app.get("/alerts/{event_id}/image")
+def alert_image(event_id: uuid.UUID, x_api_key: str | None = Header(default=None)):
+    authorize_history(x_api_key)
+    try:
+        photo = app.state.alerts.read_image(str(event_id))
+    except DeliveryError as exc:
+        raise history_error(exc) from None
+    return Response(photo, media_type="image/jpeg", headers={"Cache-Control": "private, no-store",
+                                                            "X-Content-Type-Options": "nosniff"})
 
 
 @app.get("/favicon.svg", include_in_schema=False)
