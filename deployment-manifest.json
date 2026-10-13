@@ -42,8 +42,8 @@
     },
     {
       "path": "web/index.html",
-      "bytes": 42356,
-      "sha256": "0c2e7960372cf8e108dab3667ddc1a2c075d379f22efa27645162b0373be0ac3"
+      "bytes": 48984,
+      "sha256": "af0b60d97d7ed1fefbcd03b49dcdbe43a3c836f29487c631bf44b1a4d80fab45"
     },
     {
       "path": "web/favicon.svg",
